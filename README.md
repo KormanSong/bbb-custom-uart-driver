@@ -13,7 +13,7 @@
 
 ## 3. 사용 기술 (Tech Stack)
 * Language: C
-* OS: Linux (Kernel vX.Y - 가능하다면 버전 명시) on BeagleBone Black
+* OS: Linux (5.10.168-ti-r79) on BeagleBone Black
 * Core: Linux Kernel Device Driver Development, UART Protocol Internals
 * Algorithms: ECC (Hamming Code), CRC
 
