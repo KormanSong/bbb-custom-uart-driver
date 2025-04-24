@@ -15,10 +15,17 @@
 * Language: C
 * OS: Linux (5.10.168-ti-r79) on BeagleBone Black
 * Core: Linux Kernel Device Driver Development, UART Protocol Internals
-* Algorithms: ECC (Hamming Code), CRC
+* Algorithms: ECC (Hamming Code), CRC, Custom Error Correction Algorithm (3중 샘플링)
+
+## 4. 주요 결과 (Key Results)
+* **비트 오류율(BER) 감소 (정확한 수치 측정 필요)** (기존 ~3% 대비 획기적 개선)
+* 안정적인 64bit UART 통신 환경 구축 완료
+* 프로젝트 결과의 기술적 우수성을 인정받아 **담당 교수 논문 작성 권유**
+* 클라우드(Mybox) 기반 협업 시스템 구축 및 활용을 통해 **효율적인 팀 프로젝트 관리 및 성공적 완수** (팀장 역할 수행)
 
 ## 4. 빌드 방법 (How to Build)
 1. BeagleBone Black에서 빌드하거나, 해당 보드용 Cross-Compile 환경을 구성합니다.
+   * Linux header 설치: sudo apt-get install linux-headers-$(uname –r)
 2. 프로젝트 루트 디렉토리에서 `make all` 명령을 실행합니다.
    ```bash
    make all
