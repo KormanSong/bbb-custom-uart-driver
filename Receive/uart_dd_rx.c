@@ -11,9 +11,9 @@
 #include <linux/hrtimer.h>
 
 
-
+#define SAMPLES 3
 #define BAUD_RATE 9600
-#define BIT_DELAY_NS (1000000000 / BAUD_RATE)
+#define BIT_DELAY_NS (1000000000 / SAMPLES / BAUD_RATE)
 
 #define GPIO_MAJOR   246
 #define GPIO_MINOR   0
@@ -82,7 +82,9 @@ static unsigned char rx_buffer[RX_BUFFER_SIZE][RX_DATA_SIZE_BYTES];
 static int rx_buffer_head = 0;       
 static int rx_buffer_tail = 0;    
 static int rx_bit_count = 0;          
-static unsigned char rx_data[RX_DATA_SIZE_BYTES]; 
+static unsigned char rx_data[RX_DATA_SIZE_BYTES];
+static int rx_sample_idx = 0;
+static unsigned char rx_sample[34];
 
 static struct hrtimer rx_timer;  // 수신용 hrtimer
 static bool timer_running = false; // 타이머 상태 확인
@@ -92,11 +94,9 @@ static bool timer_running = false; // 타이머 상태 확인
 
 static irqreturn_t gpio_irq_handler(int irq, void *dev_id) {
     if (!timer_running) {
-        rx_bit_count = 0;
-        memset(rx_data, 0, sizeof(rx_data));
-        // Start bit 감지 후 1.5 비트 시간 후에 첫 데이터 비트 샘플링
-    hrtimer_start(&rx_timer, ns_to_ktime(BIT_DELAY_NS * 0.15), HRTIMER_MODE_REL);
         timer_running = true;
+        // Start bit 감지 후 1.5 비트 시간 후에 첫 데이터 비트 샘플링
+        hrtimer_start(&rx_timer, 0, HRTIMER_MODE_REL);
     }
     return IRQ_HANDLED;
 }
@@ -230,8 +230,18 @@ uint64_t decode_interleaved(ecc_interleaved* encoded, int* error_type) {
     }
     return result;
 }
+/*
+static void print_samples(void) {
+    int bitIndex;
+    unsigned char print_samples_buf[273];
+    for(bitIndex = 0; bitIndex < 272; bitIndex++) {
+        print_samples_buf[bitIndex] = (rx_sample[bitIndex / 8] & (1 << (bitIndex % 8))) ? '1' : '0';
+    }
+    print_samples_buf[272] = '\0';
 
-
+    printk("samples : %s\n", print_samples_buf);
+}
+*/
 static void buffer_push(const unsigned char* data)
 {
     if (BUFFER_FULL) {
@@ -254,34 +264,89 @@ static int buffer_pop(unsigned char* out_data)
     return 1; 
 }
 
+void replace_char(unsigned char* str) {
+    int i;
+    for (i = 0; i < 8; i++) {
+        if (str[i] == 30) {
+            str[i] = 0;
+        }
+    }
+}
+
+void sample_to_buf(void) {
+    int count = 0;
+    int value = 0;
+    int scan = 0;
+    int rx_sample_idx = 0;
+    int rx_data_cnt = 0;
+    int rx_data_idx = 0;
+    unsigned char rx_data_temp[15] = {0};
+    int i;
+    /*
+    int bitIndex = 0;
+    int byteIndex;
+    int bitPos;
+    unsigned char print_binary_buf1[121];
+    unsigned char print_binary_buf2[89];
+    */
+    //print_samples();
+    for(rx_sample_idx = 0; rx_sample_idx < 272; rx_sample_idx++) {
+        // scan
+        scan = (rx_sample[rx_sample_idx / 8] & (1 << (rx_sample_idx % 8))) ? 1 : 0;
+        
+        if (scan == value && rx_sample_idx < 271) { // continue
+            count++;
+        } else { // toggle
+            for (rx_data_cnt = 0; rx_data_cnt < (count-1)/3+1; rx_data_cnt++) {
+                if (value == 1) {
+                    rx_data_temp[rx_data_idx / 8] |= (1 << (rx_data_idx % 8));
+                }
+                rx_data_idx++;
+            }
+            count = 1;
+            value = scan;
+        }
+    }
+
+    for(i = 0; i < 88; i++){
+        rx_data[i / 8] |= (((rx_data_temp[(i+1) / 8] & (1 << ((i+1) % 8))) ? 1 : 0) << i % 8);
+    }
+    /*
+    for(bitIndex = 0; bitIndex < 120; bitIndex++) {
+        byteIndex = bitIndex / 8;
+        bitPos = bitIndex % 8;
+        print_binary_buf1[bitIndex] = !!(rx_data_temp[byteIndex] & (1 << bitPos)) + 48;
+    }
+    print_binary_buf1[120] = '\0';
+    printk("receive binary : %s\n", print_binary_buf1);
+
+    for(bitIndex = 0; bitIndex < 88; bitIndex++) {
+        byteIndex = bitIndex / 8;
+        bitPos = bitIndex % 8;
+        print_binary_buf2[bitIndex] = !!(rx_data[byteIndex] & (1 << bitPos)) + 48;
+    }
+    print_binary_buf2[88] = '\0';
+    printk("processed binary : %s\n", print_binary_buf2);
+    */
+    buffer_push(rx_data);
+}
+
 enum hrtimer_restart rx_timer_callback(struct hrtimer *timer)
 {
     int gpio_value = ((*(gpio + GPIO_DATAIN / 4)) & (1 << GPIO_UART_RX)) ? 1 : 0;
-    if (rx_bit_count == 0) {
-       printk("Start bit = %d\n", gpio_value);
-    }
-    else if (rx_bit_count >= 1 && rx_bit_count <= RX_PACKET_SIZE_BITS) {
-        int bitIndex = rx_bit_count - 1; // 0~87
-        int byteIndex = bitIndex / 8;    // 0~10
-        int bitPos = bitIndex % 8;       // 0~7
-        if (gpio_value) {
-            rx_data[byteIndex] |= (1 << bitPos);
-        }
-    }
-    else if (rx_bit_count == RX_PACKET_SIZE_BITS + 1) {
-        printk("Stop bit = %d\n", gpio_value);
-        buffer_push(rx_data);
+    if (gpio_value && rx_sample_idx < 272) {
+        rx_sample[rx_sample_idx / 8] |= (1 << (rx_sample_idx % 8));
+    } else if (rx_sample_idx == 272) {
+        sample_to_buf();
+        rx_sample_idx = 0;
+        memset(rx_sample, 0, sizeof(rx_sample));
+        memset(rx_data, 0, sizeof(rx_data));
         timer_running = false;
         return HRTIMER_NORESTART;
     }
-
-    rx_bit_count++;
-    if (rx_bit_count < RX_TOTAL_BITS) {
-        hrtimer_forward_now(timer, ns_to_ktime(BIT_DELAY_NS));
-        return HRTIMER_RESTART;
-    }
-
-    return HRTIMER_NORESTART; 
+    rx_sample_idx++;
+    hrtimer_forward_now(timer, ns_to_ktime(BIT_DELAY_NS));
+    return HRTIMER_RESTART;
 }
 
 
@@ -323,6 +388,10 @@ int start_module(void){
     hrtimer_init(&rx_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     rx_timer.function = rx_timer_callback;
 
+    rx_sample_idx = 0;
+    memset(rx_sample, 0, sizeof(rx_sample));
+    memset(rx_data, 0, sizeof(rx_data));
+    
    return 0;           
 }
 
@@ -392,6 +461,7 @@ static ssize_t gpio_read(struct file *file, char *buf, size_t len, loff_t *off)
                 return -EIO;
         }
         memcpy(decoded_buf, &decoded_data, 8);
+        replace_char(decoded_buf);
         if (copy_to_user(buf, decoded_buf, bytes_to_copy)) {
             return -EFAULT;
         }

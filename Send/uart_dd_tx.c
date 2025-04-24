@@ -260,7 +260,21 @@ int start_module(void)
 
    return 0;
 }
-
+/*
+static void print_binary(void) {
+    int bitIndex = 0;
+    int byteIndex;
+    int bitPos;
+    unsigned char print_binary_buf[89];
+    for(bitIndex = 0; bitIndex < 88; bitIndex++) {
+        byteIndex = bitIndex / 8;
+        bitPos = bitIndex % 8;
+        print_binary_buf[bitIndex] = !!(tx_data[byteIndex] & (1 << bitPos)) + 48;
+    }
+    print_binary_buf[88] = '\0';
+    printk("send binary : %s\n", print_binary_buf);
+}
+*/
 // 모듈 종료
 void end_module(void)
 {
@@ -324,6 +338,11 @@ static ssize_t gpio_write(struct file* file, const char* buf, size_t len, loff_t
            return -EFAULT;
        }
 
+        // 빈 데이터는 30으로 채우기
+       if (chunk_size < 8) {
+            memset((char *)&input_data+chunk_size, 30, 8-chunk_size);
+       }
+
        printk(KERN_INFO "[sw_uart_tx] Transmitting %zu bytes + padded %zu bytes",
               chunk_size, 8 - chunk_size);
 
@@ -346,8 +365,8 @@ static ssize_t gpio_write(struct file* file, const char* buf, size_t len, loff_t
 
        // 전송 완료 대기
        while (!stop_transmission)
-           cpu_relax();
-
+        cpu_relax();
+        //print_binary();
        total_sent += chunk_size;
    }
    return total_sent;
