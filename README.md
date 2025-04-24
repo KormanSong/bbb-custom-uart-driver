@@ -1,6 +1,7 @@
-# bbb-custom-uart-driver
+# BBB Custom UART Driver (BeagleBone Black)
 
-# 고신뢰성/고효율 UART 리눅스 디바이스 드라이버 개발 (BeagleBone Black)
+## High-Reliability/Efficiency Custom UART Linux Device Driver Development (BeagleBone Black)
+(고신뢰성/고효율 UART 리눅스 디바이스 드라이버 개발)
 
 ## 1. 프로젝트 개요 (Overview)
 * 임베디드 리눅스(BeagleBone Black) 환경 기반의 고신뢰성/고효율 커스텀 UART 디바이스 드라이버 개발 프로젝트
@@ -16,8 +17,33 @@
 * Core: Linux Kernel Device Driver Development, UART Protocol Internals
 * Algorithms: ECC (Hamming Code), CRC
 
-## 4. (향후 추가 예정)
-* 빌드 및 사용 방법 (Build & Usage)
+## 4. 빌드 방법 (How to Build)
+1. BeagleBone Black에서 빌드하거나, 해당 보드용 Cross-Compile 환경을 구성합니다.
+2. 프로젝트 루트 디렉토리에서 `make all` 명령을 실행합니다.
+   ```bash
+   make all
+   ```
+3. `Send/uart_dd_tx.ko`, `Receive/uart_dd_rx.ko` 커널 모듈 파일과 `Send/send`, `Receive/main` 실행 파일이 생성됩니다.
+
+## 5. 사용 방법 (How to Use)
+1.  **모듈 로드 및 디바이스 노드 생성:**
+    ```bash
+    make load
+    ```
+2.  **수신 앱 실행:** 별도의 터미널에서 수신 앱을 실행합니다.
+    ```bash
+    ./Receive/main
+    ```
+3.  **송신 앱 실행:** 다른 터미널에서 송신 앱을 실행하고 메시지를 입력합니다.
+    ```bash
+    ./Send/send
+    ```
+4.  **모듈 언로드 및 디바이스 노드 제거 및 빌드 파일 제거:**
+    ```bash
+    make unload
+    ```
+
+## 5. (향후 추가 예정)
 * 상세 설계 및 알고리즘 설명 (Detailed Design)
 * 결과 측정 및 분석 데이터 (Results & Analysis)
 * 배운 점 및 개선 방향 (Lessons Learned)
